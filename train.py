@@ -10,20 +10,59 @@ import numpy as np
 from core import utils
 from core.utils import freeze_all, unfreeze_all
 
+
+### - Adding lines to remove the error - tensorflow.python.framework.errors_impl.NotFoundError: No algorithm worked! [Op:Conv2D]
+#'''
+from tensorflow.compat.v1 import ConfigProto
+from tensorflow.compat.v1 import InteractiveSession
+
+config = ConfigProto()
+config.gpu_options.per_process_gpu_memory_fraction = 0.5
+#config.gpu_options.allow_growth = True
+session = InteractiveSession(config=config)
+#'''
+###
+
 flags.DEFINE_string('model', 'yolov4', 'yolov4, yolov3')
-flags.DEFINE_string('weights', './scripts/yolov4.weights', 'pretrained weights')
+flags.DEFINE_string('weights', './data/yolov4.weights', 'pretrained weights')
 flags.DEFINE_boolean('tiny', False, 'yolo or yolo-tiny')
 
 def main(_argv):
-    physical_devices = tf.config.experimental.list_physical_devices('GPU')
-    if len(physical_devices) > 0:
-        tf.config.experimental.set_memory_growth(physical_devices[0], True)
+    #physical_devices = tf.config.experimental.list_physical_devices('GPU')
+    #if len(physical_devices) > 0:
+    #    tf.config.experimental.set_memory_growth(physical_devices[0], True) # as an error was throwing https://github.com/hunglc007/tensorflow-yolov4-tflite/issues/171
+
+    '''
+    config = ConfigProto()
+    #config.gpu_options.per_process_gpu_memory_fraction = 0.2
+    config.gpu_options.allow_growth = True
+    session = InteractiveSession(config=config)
+    '''
+    #test code
+    '''
+    config = tf.compat.v1.ConfigProto(gpu_options=
+                                      tf.compat.v1.GPUOptions(per_process_gpu_memory_fraction=0.8)
+                                      # device_count = {'GPU': 1}
+                                      )
+    config.gpu_options.allow_growth = True
+    session = tf.compat.v1.Session(config=config)
+    tf.compat.v1.keras.backend.set_session(session)
+    '''
+    #test code ends here
+
+    '''
+    gpus = tf.config.list_physical_devices('GPU')
+    tf.config.experimental.set_virtual_device_configuration(
+        gpus[0],
+        [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=4096)])
+    '''
 
     trainset = Dataset(FLAGS, is_training=True)
     testset = Dataset(FLAGS, is_training=False)
     logdir = "./data/log"
     isfreeze = False
-    steps_per_epoch = len(trainset)
+    #steps_per_epoch = len(trainset)
+    steps_per_epoch = 200  # experimental to train the networks fast
     first_stage_epochs = cfg.TRAIN.FISRT_STAGE_EPOCHS
     second_stage_epochs = cfg.TRAIN.SECOND_STAGE_EPOCHS
     global_steps = tf.Variable(1, trainable=False, dtype=tf.int64)
@@ -153,7 +192,9 @@ def main(_argv):
             train_step(image_data, target)
         for image_data, target in testset:
             test_step(image_data, target)
-        model.save_weights("./checkpoints/yolov4")
+        model.save_weights("./checkpoints/yolov4_1")
+        #model.save("./saved_keras_model")
+        model.save("pruned_model.h5")
 
 if __name__ == '__main__':
     try:
